@@ -1,0 +1,22 @@
+esphome:
+  name: virtual
+
+host:
+  mac_address: "06:35:69:ab:f6:79"
+
+logger:
+  level: DEBUG
+
+api:
+  encryption:
+    key: !secret emulator_encryption_key
+
+light:
+  - platform: binary
+    name: "Light Test - Binary 1"
+    output: light_test_binary_1_output
+    
+output:
+  - platform: gpio
+    id: light_test_binary_1_output
+    pin: GPIO22

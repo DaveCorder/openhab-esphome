@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 public class LightEsphomeDeviceTest extends AbstractESPHomeDeviceTest {
 
     protected File getEspDeviceConfigurationYamlFileName() {
-        return new File("src/test/resources/device_configurations/light.yaml");
+        return new File("src/test/resources/device_configurations/light-binary.yaml");
     }
 
     @Test
