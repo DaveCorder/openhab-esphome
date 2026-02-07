@@ -1,2 +1,5 @@
 .esphome
+.vscode
+target
+
 .claude/
