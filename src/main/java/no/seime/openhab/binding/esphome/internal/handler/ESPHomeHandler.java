@@ -22,6 +22,8 @@ import org.apache.commons.lang3.StringUtils;
 import org.eclipse.jdt.annotation.NonNull;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
+import org.openhab.core.events.AbstractEvent;
+import org.openhab.core.events.EventPublisher;
 import org.openhab.core.thing.*;
 import org.openhab.core.thing.binding.BaseThingHandler;
 import org.openhab.core.thing.type.ChannelType;
@@ -33,6 +35,7 @@ import com.google.protobuf.GeneratedMessage;
 import com.jano7.executor.KeySequentialExecutor;
 
 import io.esphome.api.*;
+import no.seime.openhab.binding.esphome.events.ESPHomeEventFactory;
 import no.seime.openhab.binding.esphome.internal.*;
 import no.seime.openhab.binding.esphome.internal.LogLevel;
 import no.seime.openhab.binding.esphome.internal.bluetooth.ESPHomeBluetoothProxyHandler;
@@ -53,6 +56,7 @@ public class ESPHomeHandler extends BaseThingHandler implements CommunicationLis
     private static final int API_VERSION_MAJOR = 1;
     private static final int API_VERSION_MINOR = 9;
     private static final String DEVICE_LOGGER_NAME = "ESPHOMEDEVICE";
+    private static final String ACTION_TAG_SCANNED = "esphome.tag_scanned";
 
     private final Logger logger = LoggerFactory.getLogger(ESPHomeHandler.class);
     private final Logger deviceLogger = LoggerFactory.getLogger(DEVICE_LOGGER_NAME);
@@ -66,6 +70,7 @@ public class ESPHomeHandler extends BaseThingHandler implements CommunicationLis
     private final ESPHomeEventSubscriber eventSubscriber;
     private final MonitoredScheduledThreadPoolExecutor executorService;
     private final KeySequentialExecutor packetProcessor;
+    private final EventPublisher eventPublisher;
     @Nullable
     private final String defaultEncryptionKey;
     private @Nullable ESPHomeConfiguration config;
@@ -82,6 +87,8 @@ public class ESPHomeHandler extends BaseThingHandler implements CommunicationLis
     private boolean disposed = false;
     private boolean interrogated;
     private boolean bluetoothProxyStarted = false;
+    // default is not used initialized in initialize()
+    private ExponentialBackoff exponentialBackoff = new ExponentialBackoff(10, 500);
 
     private String logPrefix;
     @Nullable
@@ -90,7 +97,8 @@ public class ESPHomeHandler extends BaseThingHandler implements CommunicationLis
     public ESPHomeHandler(Thing thing, ConnectionSelector connectionSelector,
             ESPChannelTypeProvider dynamicChannelTypeProvider, ESPStateDescriptionProvider stateDescriptionProvider,
             ESPHomeEventSubscriber eventSubscriber, MonitoredScheduledThreadPoolExecutor executorService,
-            KeySequentialExecutor packetProcessor, @Nullable String defaultEncryptionKey) {
+            KeySequentialExecutor packetProcessor, EventPublisher eventPublisher,
+            @Nullable String defaultEncryptionKey) {
         super(thing);
         this.connectionSelector = connectionSelector;
         this.dynamicChannelTypeProvider = dynamicChannelTypeProvider;
@@ -99,6 +107,7 @@ public class ESPHomeHandler extends BaseThingHandler implements CommunicationLis
         this.eventSubscriber = eventSubscriber;
         this.executorService = executorService;
         this.packetProcessor = packetProcessor;
+        this.eventPublisher = eventPublisher;
         this.defaultEncryptionKey = defaultEncryptionKey;
 
         // Register message handlers for each type of message pairs
@@ -134,6 +143,8 @@ public class ESPHomeHandler extends BaseThingHandler implements CommunicationLis
                 TimeStateResponse.class);
         registerMessageHandler(EntityTypes.LOCK, new LockMessageHandler(this), ListEntitiesLockResponse.class,
                 LockStateResponse.class);
+        registerMessageHandler(EntityTypes.VALVE, new ValveMessageHandler(this), ListEntitiesValveResponse.class,
+                ValveStateResponse.class);
     }
 
     private void registerMessageHandler(String entityType,
@@ -156,6 +167,7 @@ public class ESPHomeHandler extends BaseThingHandler implements CommunicationLis
             logPrefix = String.format("%s", config.logPrefix); // To avoid nullness warning
         }
 
+        exponentialBackoff = new ExponentialBackoff(config.reconnectInterval, config.maxReconnectInterval);
         if (config.hostname != null && !config.hostname.isEmpty()) {
             scheduleConnect(0);
         } else {
@@ -244,7 +256,7 @@ public class ESPHomeHandler extends BaseThingHandler implements CommunicationLis
             } catch (ProtocolException e) {
                 logger.warn("[{}] Error initial connection", logPrefix, e);
                 updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.COMMUNICATION_ERROR, e.getMessage());
-                scheduleConnect(config.reconnectInterval);
+                scheduleConnect(exponentialBackoff.getNextDelay());
             }
         }
     }
@@ -309,11 +321,14 @@ public class ESPHomeHandler extends BaseThingHandler implements CommunicationLis
     public void onConnect() throws ProtocolAPIError {
         synchronized (connectionStateLock) {
             cancelConnectionTimeoutWatchdog();
+            exponentialBackoff.reset();
             logger.debug("[{}] Encrypted connection established. Starting API handshake.", logPrefix);
             HelloRequest helloRequest = HelloRequest.newBuilder().setClientInfo("openHAB")
                     .setApiVersionMajor(API_VERSION_MAJOR).setApiVersionMinor(API_VERSION_MINOR).build();
             connectionState = ConnectionState.HELLO_SENT;
             frameHelper.send(helloRequest);
+            // Send this at the same time; no need to wait
+            frameHelper.send(ConnectRequest.getDefaultInstance());
         }
     }
 
@@ -331,7 +346,6 @@ public class ESPHomeHandler extends BaseThingHandler implements CommunicationLis
                                 message.getClass().getSimpleName());
                     }
                     case HELLO_SENT -> handleHelloResponse(message);
-                    case LOGIN_SENT -> handleLoginResponse(message);
                     case CONNECTED -> handleConnected(message);
                 }
             } catch (ProtocolAPIError e) {
@@ -363,9 +377,10 @@ public class ESPHomeHandler extends BaseThingHandler implements CommunicationLis
                 return;
             }
 
+            int nextDelay = exponentialBackoff.getNextDelay();
             String finalMessage = message;
             if (scheduleReconnect) {
-                finalMessage = String.format("%s. Will reconnect in %d seconds", message, config.reconnectInterval);
+                finalMessage = String.format("%s. Will reconnect in %d seconds", message, nextDelay);
             }
 
             logger.warn("[{}] Disconnecting. Reason: {}", logPrefix, finalMessage);
@@ -384,7 +399,7 @@ public class ESPHomeHandler extends BaseThingHandler implements CommunicationLis
             connectionState = ConnectionState.UNINITIALIZED;
 
             if (scheduleReconnect) {
-                scheduleConnect(config.reconnectInterval);
+                scheduleConnect(nextDelay);
             }
         }
     }
@@ -396,6 +411,15 @@ public class ESPHomeHandler extends BaseThingHandler implements CommunicationLis
                     message.getClass().getSimpleName(), StringUtils.trimToEmpty(message.toString()));
         }
         if (disposed) {
+            return;
+        }
+
+        if (message instanceof ConnectResponse connectResponse) {
+            if (connectResponse.getInvalidPassword()) {
+                logger.debug("[{}] Received login response {}", logPrefix, connectResponse);
+
+                handleDisconnection(ThingStatusDetail.CONFIGURATION_ERROR, "Invalid password", false);
+            }
             return;
         }
 
@@ -436,6 +460,25 @@ public class ESPHomeHandler extends BaseThingHandler implements CommunicationLis
             }
         } else if (message instanceof SubscribeLogsResponse subscribeLogsResponse) {
             deviceLogger.info("[{}] {}", logPrefix, subscribeLogsResponse.getMessage().toStringUtf8());
+        } else if (message instanceof HomeassistantServiceResponse serviceResponse) {
+            Map<String, String> data = convertPbListToMap(serviceResponse.getDataList());
+            Map<String, String> dataTemplate = convertPbListToMap(serviceResponse.getDataTemplateList());
+            Map<String, String> variables = convertPbListToMap(serviceResponse.getVariablesList());
+            AbstractEvent event;
+            if (serviceResponse.getIsEvent()) {
+                String tagId;
+                if (serviceResponse.getService().equals(ACTION_TAG_SCANNED) && dataTemplate.isEmpty()
+                        && variables.isEmpty() && data.size() == 1 && (tagId = data.get("tag_id")) != null) {
+                    event = ESPHomeEventFactory.createTagScannedEvent(config.deviceId, tagId);
+                } else {
+                    event = ESPHomeEventFactory.createEventEvent(config.deviceId, serviceResponse.getService(), data,
+                            dataTemplate, variables);
+                }
+            } else {
+                event = ESPHomeEventFactory.createActionEvent(config.deviceId, serviceResponse.getService(), data,
+                        dataTemplate, variables);
+            }
+            eventPublisher.post(event);
         } else if (message instanceof SubscribeHomeAssistantStateResponse subscribeHomeAssistantStateResponse) {
             initializeStateSubscription(subscribeHomeAssistantStateResponse);
         } else if (message instanceof GetTimeRequest) {
@@ -526,17 +569,25 @@ public class ESPHomeHandler extends BaseThingHandler implements CommunicationLis
         }
     }
 
-    private void handleLoginResponse(GeneratedMessage message) throws ProtocolAPIError {
-        if (message instanceof ConnectResponse connectResponse) {
-            synchronized (connectionStateLock) {
-                logger.debug("[{}] Received login response {}", logPrefix, connectResponse);
+    @Override
+    public void updateState(ChannelUID channelUID, State state) {
+        super.updateState(channelUID, state);
+    }
 
-                if (connectResponse.getInvalidPassword()) {
-                    handleDisconnection(ThingStatusDetail.CONFIGURATION_ERROR, "Invalid password", false);
-                    return;
-                }
+    private void handleHelloResponse(GeneratedMessage message) throws ProtocolAPIError {
+        if (message instanceof HelloResponse helloResponse) {
+            synchronized (connectionStateLock) {
+                logger.debug("[{}] Received hello response {}", logPrefix, helloResponse);
+                logger.info(
+                        "[{}] API handshake successful. Device '{}' running '{}' on protocol version '{}.{}'. Logging in.",
+                        logPrefix, helloResponse.getName(), helloResponse.getServerInfo(),
+                        helloResponse.getApiVersionMajor(), helloResponse.getApiVersionMinor());
                 connectionState = ConnectionState.CONNECTED;
 
+                if (config.allowActions) {
+                    logger.debug("[{}] Requesting device to send actions and events", logPrefix);
+                    frameHelper.send(SubscribeHomeassistantServicesRequest.getDefaultInstance());
+                }
                 if (config.deviceLogLevel != LogLevel.NONE) {
                     logger.info("[{}] Starting to stream logs to logger " + DEVICE_LOGGER_NAME, logPrefix);
 
@@ -585,25 +636,6 @@ public class ESPHomeHandler extends BaseThingHandler implements CommunicationLis
         }
     }
 
-    @Override
-    public void updateState(ChannelUID channelUID, State state) {
-        super.updateState(channelUID, state);
-    }
-
-    private void handleHelloResponse(GeneratedMessage message) throws ProtocolAPIError {
-        if (message instanceof HelloResponse helloResponse) {
-            synchronized (connectionStateLock) {
-                logger.debug("[{}] Received hello response {}", logPrefix, helloResponse);
-                logger.info(
-                        "[{}] API handshake successful. Device '{}' running '{}' on protocol version '{}.{}'. Logging in.",
-                        logPrefix, helloResponse.getName(), helloResponse.getServerInfo(),
-                        helloResponse.getApiVersionMajor(), helloResponse.getApiVersionMinor());
-                connectionState = ConnectionState.LOGIN_SENT;
-                frameHelper.send(ConnectRequest.getDefaultInstance());
-            }
-        }
-    }
-
     public void addChannelType(ChannelType channelType) {
         dynamicChannelTypeProvider.putChannelType(channelType);
     }
@@ -629,6 +661,7 @@ public class ESPHomeHandler extends BaseThingHandler implements CommunicationLis
             this.espHomeBluetoothProxyHandler = espHomeBluetoothProxyHandler;
             if (config.enableBluetoothProxy && !bluetoothProxyStarted && connectionState == ConnectionState.CONNECTED) {
                 try {
+                    logger.info("[{}] Starting BLE proxy", logPrefix);
                     frameHelper.send(SubscribeBluetoothLEAdvertisementsRequest.getDefaultInstance());
                     bluetoothProxyStarted = true;
                 } catch (Exception e) {
@@ -642,6 +675,7 @@ public class ESPHomeHandler extends BaseThingHandler implements CommunicationLis
         synchronized (connectionStateLock) {
             if (connectionState == ConnectionState.CONNECTED) {
                 try {
+                    logger.info("[{}] Stopping BLE proxy", logPrefix);
                     frameHelper.send(UnsubscribeBluetoothLEAdvertisementsRequest.getDefaultInstance());
                 } catch (Exception e) {
                     logger.warn("[{}] Error stopping BLE proxy", logPrefix, e);
@@ -692,6 +726,14 @@ public class ESPHomeHandler extends BaseThingHandler implements CommunicationLis
         return logPrefix;
     }
 
+    private Map<String, String> convertPbListToMap(List<HomeassistantServiceMap> list) {
+        Map<String, String> map = new HashMap<>();
+        for (HomeassistantServiceMap kv : list) {
+            map.put(kv.getKey(), kv.getValue());
+        }
+        return Collections.unmodifiableMap(map);
+    }
+
     private enum ConnectionState {
         // Initial state, no connection
         UNINITIALIZED,
@@ -699,9 +741,6 @@ public class ESPHomeHandler extends BaseThingHandler implements CommunicationLis
         CONNECTING,
         // TCP connected to ESPHome, first handshake sent
         HELLO_SENT,
-
-        // First handshake received, login sent (with password)
-        LOGIN_SENT,
 
         // Connection established
         CONNECTED

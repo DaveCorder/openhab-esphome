@@ -14,6 +14,9 @@
 				<label>Device address</label>
 				<context>network-address</context>
 			</parameter-group>
+			<parameter-group name="haActions">
+				<label>Actions</label>
+			</parameter-group>
 			<parameter-group name="timeout">
 				<label>Connection timeouts</label>
 			</parameter-group>
@@ -47,10 +50,31 @@
 					https://esphome.io/components/api#configuration-variables</description>
 			</parameter>
 
-			<parameter name="reconnectInterval" type="integer" min="0" required="false" groupName="timeout">
-				<label>Reconnect interval in seconds</label>
+			<parameter name="allowActions" type="boolean" required="false" groupName="haActions">
+				<label>Allow the device to send actions and events</label>
+				<description>Actions includes requesting actions be executed, sending events, and scanning tags. See
+					https://esphome.io/components/api/#api-actions</description>
+				<default>false</default>
+				<advanced>false</advanced>
+			</parameter>
+
+			<parameter name="reconnectInterval" type="integer" min="1" required="false" groupName="timeout">
+				<label>Initial reconnect interval in seconds</label>
 				<default>10</default>
 				<description>Seconds between reconnect attempts when connection is lost or the device restarts.
+					A random value up to
+					half of the current reconnect interval is added to spread attempts between devices.
+					With each
+					failed attempt the
+					reconnect
+					interval is doubled.
+				</description>
+				<advanced>true</advanced>
+			</parameter>
+			<parameter name="maxReconnectInterval" type="integer" min="1" required="false" groupName="timeout">
+				<label>Maximum reconnect interval in seconds</label>
+				<default>120</default>
+				<description>Maximum reconnect interval in seconds. Reconnect interval is doubled after a failure.
 				</description>
 				<advanced>true</advanced>
 			</parameter>

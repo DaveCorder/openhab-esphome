@@ -38,6 +38,11 @@
 
   <dependencies>
     <dependency>
+      <groupId>com.neovisionaries</groupId>
+      <artifactId>nv-bluetooth</artifactId>
+      <version>1.8</version>
+    </dependency>
+    <dependency>
       <groupId>com.google.guava</groupId>
       <artifactId>guava</artifactId>
       <version>32.1.2-jre</version>
@@ -48,7 +53,7 @@
       <groupId>org.openhab.addons.bundles</groupId>
       <artifactId>org.openhab.binding.bluetooth</artifactId>
       <version>${project.parent.version}</version>
-      <scope>compile</scope>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>com.jano7</groupId>
@@ -103,7 +108,6 @@
       <artifactId>protobuf-java</artifactId>
       <version>${proto.version}</version>
     </dependency>
-
   </dependencies>
 
   <repositories>

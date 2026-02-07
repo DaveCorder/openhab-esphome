@@ -12,7 +12,6 @@ import org.openhab.core.thing.type.ChannelKind;
 import org.openhab.core.thing.type.ChannelType;
 import org.openhab.core.types.Command;
 import org.openhab.core.types.StateDescription;
-import org.openhab.core.types.util.UnitUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,29 +52,18 @@ public class SensorMessageHandler extends AbstractMessageHandler<ListEntitiesSen
         StateDescription stateDescription;
 
         if (deviceClass.getItemType().equals(DATETIME)) {
-            channelType = addChannelType(rsp.getUniqueId(), rsp.getName(), itemType, Set.of("Status"), icon,
+            channelType = addChannelType(rsp.getObjectId(), rsp.getName(), itemType, Set.of("Status"), icon,
                     rsp.getEntityCategory(), rsp.getDisabledByDefault());
             stateDescription = patternStateDescription("%1$tY-%1$tm-%1$td %1$tH:%1$tM:%1$tS", true);
         } else if (deviceClass.getItemType().equals(STRING)) {
-            channelType = addChannelType(rsp.getUniqueId(), rsp.getName(), itemType, Set.of("Status"), icon,
+            channelType = addChannelType(rsp.getObjectId(), rsp.getName(), itemType, Set.of("Status"), icon,
                     rsp.getEntityCategory(), rsp.getDisabledByDefault());
             stateDescription = patternStateDescription("%s", true);
         } else {
             String unitOfMeasurement = rsp.getUnitOfMeasurement();
-            itemType = resolveNumericItemType(unitOfMeasurement, rsp.getName(), deviceClass);
+            itemType = resolveNumericItemType(unitOfMeasurement, rsp.getName(), deviceClass, configuration);
 
-            if (!"None".equals(unitOfMeasurement) && !"".equals(unitOfMeasurement)) {
-                if (isOHSupportedUnit(unitOfMeasurement)) {
-                    configuration.put("unit", unitOfMeasurement);
-                } else {
-                    logger.info(
-                            "[{}] Unit of measurement '{}' is not supported by openHAB, ignoring and using plain 'Number' for entity '{}'",
-                            handler.getLogPrefix(), unitOfMeasurement, rsp.getName());
-                    itemType = NUMBER;
-                }
-            }
-
-            channelType = addChannelType(rsp.getUniqueId(), rsp.getName(), itemType, semanticTags, icon,
+            channelType = addChannelType(rsp.getObjectId(), rsp.getName(), itemType, semanticTags, icon,
                     rsp.getEntityCategory(), rsp.getDisabledByDefault());
             stateDescription = patternStateDescription("%." + rsp.getAccuracyDecimals() + "f "
                     + (unitOfMeasurement.equals("%") ? "%unit%" : unitOfMeasurement), true);
@@ -84,10 +72,6 @@ public class SensorMessageHandler extends AbstractMessageHandler<ListEntitiesSen
                 .withLabel(rsp.getName()).withKind(ChannelKind.STATE).withType(channelType.getUID())
                 .withAcceptedItemType(itemType).withConfiguration(configuration).build();
         super.registerChannel(channel, channelType, stateDescription);
-    }
-
-    private boolean isOHSupportedUnit(String unitOfMeasurement) {
-        return UnitUtils.parseUnit(unitOfMeasurement) != null;
     }
 
     @Override

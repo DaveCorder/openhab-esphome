@@ -16,6 +16,7 @@ import javax.validation.constraints.NotNull;
 import org.eclipse.jdt.annotation.NonNull;
 import org.eclipse.jdt.annotation.Nullable;
 import org.openhab.core.config.core.Configuration;
+import org.openhab.core.library.CoreItemFactory;
 import org.openhab.core.library.types.DateTimeType;
 import org.openhab.core.library.types.DecimalType;
 import org.openhab.core.library.types.QuantityType;
@@ -46,11 +47,11 @@ public abstract class AbstractMessageHandler<S extends GeneratedMessage, T exten
         this.handler = handler;
     }
 
-    protected ChannelType addChannelType(final String channelTypePrefix, final String label, final String itemType,
+    protected ChannelType addChannelType(final String channelTypeSuffix, final String label, final String itemType,
             @Nullable final Set<String> tags, String category, EntityCategory entityCategory,
             boolean disabledByDefault) {
         final ChannelTypeUID channelTypeUID = new ChannelTypeUID(BindingConstants.BINDING_ID,
-                channelTypePrefix + handler.getThing().getUID().getId());
+                handler.getThing().getUID().getId() + "_" + channelTypeSuffix);
 
         final StateChannelTypeBuilder channelTypeBuilder = ChannelTypeBuilder.state(channelTypeUID, label, itemType);
         if (tags != null && !tags.isEmpty()) {
@@ -156,7 +157,20 @@ public abstract class AbstractMessageHandler<S extends GeneratedMessage, T exten
 
     public abstract void buildChannels(S rsp);
 
-    protected String resolveNumericItemType(String unit, String name, @NonNull DeviceClass deviceClass) {
+    protected String resolveNumericItemType(String unit, String name, @NonNull DeviceClass deviceClass,
+            Configuration configuration) {
+        // Guard against special "no unit" values before attempting to parse or validate
+        if (unit == null || "None".equals(unit) || unit.isEmpty()) {
+            return CoreItemFactory.NUMBER;
+        }
+        if (UnitUtils.parseUnit(unit) == null) {
+            logger.info(
+                    "[{}] Unit of measurement '{}' is not supported by openHAB, ignoring and using plain 'Number' for entity '{}'",
+                    handler.getLogPrefix(), unit, name);
+            return CoreItemFactory.NUMBER;
+        }
+
+        configuration.put("unit", unit);
 
         String itemTypeFromUnit = getItemTypeBaseOnUnit(unit);
         String itemTypeToUse;
@@ -357,7 +371,7 @@ public abstract class AbstractMessageHandler<S extends GeneratedMessage, T exten
         }
         if (configuration != null)
             configuration.put("deviceClass", deviceClass.getDeviceClass());
-        return defaultDeviceClass;
+        return deviceClass;
     }
 
     protected Set<String> createSemanticTags(String point, DeviceClass deviceClass) {
