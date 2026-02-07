@@ -415,6 +415,7 @@ public class ESPHomeHandler extends BaseThingHandler implements CommunicationLis
             }
             updateThing(editThing().withProperties(props).build());
         } else if (message instanceof ListEntitiesDoneResponse) {
+            logger.debug("[{}] DWC: message is ListEntitesDoneResponse, calling updateThing()", logPrefix);
             updateThing(editThing().withChannels(dynamicChannels).build());
             logger.debug("[{}] Device interrogation complete, done updating thing channels", logPrefix);
             interrogated = true;
