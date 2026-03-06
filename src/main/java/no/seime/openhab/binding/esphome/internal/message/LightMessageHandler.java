@@ -56,8 +56,8 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
         String subCommand = (String) channel.getConfiguration()
                 .get(BindingConstants.CHANNEL_CONFIGURATION_ENTITY_FIELD);
 
-        logger.debug(
-                "[{}] DWC: handleCommand in LightMessageHandler:\n channel UID: '{}'\n channelType UID: '{}'\n command classname: '{}'\n key: '{}'\n sub command: '{}'\n full command string: {}",
+        logger.trace(
+                "[{}] handleCommand in LightMessageHandler:\n channel UID: '{}'\n channelType UID: '{}'\n command classname: '{}'\n key: '{}'\n sub command: '{}'\n full command string: {}",
                 handler.getLogPrefix(), channel.getUID(), channel.getChannelTypeUID(), command.getClass().getName(),
                 key, subCommand, command.toFullString());
         ChannelTypeUID channelTypeUID = channel.getChannelTypeUID();
@@ -67,44 +67,40 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
         String channelAsString = channelTypeUID.getAsString();
         String channelClass = channelTypeUID.getClass().getName();
 
-        logger.debug(
-                "[{}] DWC: handleCommand in LightMessageHandler\nchannelTypeUID details:\nbinding ID: '{}'\nchannel ID: '{}'\nchannel as String: '{}'\nchannelClass: '{}'",
+        logger.trace(
+                "[{}] handleCommand in LightMessageHandler\nchannelTypeUID details:\nbinding ID: '{}'\nchannel ID: '{}'\nchannel as String: '{}'\nchannelClass: '{}'",
                 handler.getLogPrefix(), bindingID, channelID, channelAsString, channelClass);
         Set<LightColorCapability> capabilities = deserialize((String) channel.getConfiguration().get("capabilities"));
-        logger.debug("[{}] DWC: in LightMessageHandler, capabilities {}", handler.getLogPrefix(),
+        logger.trace("[{}] in LightMessageHandler, capabilities {}", handler.getLogPrefix(),
                 capabilities.toString());
 
         // maybe do ON/OFF up here before checking channel type, because in theory ON/OFF could be tied to any channel?
         if (channel.getChannelTypeUID().equals(ESPHomeChannelTypeProvider.ESPHOME_CHANNEL_TYPE_UID_COLOR)) {
-            logger.debug("[{}] DWC: channel Type UID is ESPHOME_CHANNEL_TYPE_UID_COLOR", handler.getLogPrefix());
+            logger.trace("[{}] channel Type UID is ESPHOME_CHANNEL_TYPE_UID_COLOR", handler.getLogPrefix());
             // double-check command class and light capabilities
             // ignore Brightness here, process in separate block
             if (command instanceof PercentType pct) {
-                logger.debug("[{}] DWC: Command is instanceof PercentType, sending colorBrightness",
+                logger.trace("[{}] Command is instanceof PercentType, sending colorBrightness",
                         handler.getLogPrefix());
-
-                // LightCommandRequest.Builder builder = LightCommandRequest.newBuilder().setKey(key);
-
-                // float[] rgbFloat = [builder.getRed(), builder.getBlue(), builder.getGreen()];
 
                 LightCommandRequest.Builder builder = LightCommandRequest.newBuilder().setKey(key)
                         .setColorBrightness(pct.floatValue() / PercentType.HUNDRED.floatValue())
                         .setHasColorBrightness(true);
 
-                logger.debug("[{}] DWC: Parameters:\n ColorBrightness: {}", handler.getLogPrefix(),
+                logger.trace("[{}] Parameters:\n ColorBrightness: {}", handler.getLogPrefix(),
                         pct.floatValue() / PercentType.HUNDRED.floatValue());
                 handler.sendMessage(builder.build());
             }
 
             if (command instanceof HSBType hsb && capabilities.contains(LightColorCapability.RGB)) {
 
-                logger.debug("[{}] DWC: Command is instanceof HSBType and light has RGB capability",
+                logger.trace("[{}] Command is instanceof HSBType and light has RGB capability",
                         handler.getLogPrefix());
 
-                logger.debug("[{}] DWC: Performing HSB to RGB conversion and sending message to light {}",
+                logger.trace("[{}] Performing HSB to RGB conversion and sending message to light {}",
                         handler.getLogPrefix(), hsb.toFullString());
 
-                logger.debug("[{}] DWC: HSB values:\n H: {}\n S: {}\n B: {}", handler.getLogPrefix(),
+                logger.trace("[{}] HSB values:\n H: {}\n S: {}\n B: {}", handler.getLogPrefix(),
                         hsb.getHue().floatValue(), hsb.getSaturation().floatValue(), hsb.getBrightness().floatValue());
 
                 PercentType[] percentTypes = ColorUtil.hsbToRgbPercent(hsb);
@@ -115,10 +111,8 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
                 float green = percentTypes[1].floatValue() / PercentType.HUNDRED.floatValue();
                 float blue = percentTypes[2].floatValue() / PercentType.HUNDRED.floatValue();
 
-                logger.debug("[{}] DWC: Converted RGB values:\n R: {}/{}\n G: {}/{}\n B: {}/{}", handler.getLogPrefix(),
+                logger.trace("[{}] Converted RGB values:\n R: {}/{}\n G: {}/{}\n B: {}/{}", handler.getLogPrefix(),
                         red, rgbInt[0], green, rgbInt[1], blue, rgbInt[2]);
-
-                // int[] rgb = ColorUtil.hsbToRgb(hsb);
 
                 LightCommandRequest.Builder builder = LightCommandRequest.newBuilder().setKey(key)
                         .setColorMode(ColorMode.COLOR_MODE_RGB).setHasColorMode(true).setRed(red).setGreen(green)
@@ -126,12 +120,7 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
                         .setBrightness(hsb.getBrightness().floatValue() / 100).setHasBrightness(true).setState(true)
                         .setHasState(true);
 
-                // Adjust brightness
-                // wait, no, because the B in HSB is already taken into account with the RGB conversion above?
-                // builder.setBrightness(hsb.getBrightness().floatValue() / 100).setHasBrightness(true)
-                // .setState(true);
-
-                logger.debug("[{}] DWC: Parameters:\nred: {}\ngreen: {}\nblue: {}\nbrightness: {}",
+                logger.trace("[{}] Parameters:\nred: {}\ngreen: {}\nblue: {}\nbrightness: {}",
                         handler.getLogPrefix(), percentTypes[0].floatValue() / PercentType.HUNDRED.floatValue(),
                         percentTypes[1].floatValue() / PercentType.HUNDRED.floatValue(),
                         percentTypes[2].floatValue() / PercentType.HUNDRED.floatValue(),
@@ -141,8 +130,8 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
 
         } else if (command instanceof PercentType ww
                 && channel.getChannelTypeUID().equals(ESPHomeChannelTypeProvider.ESPHOME_CHANNEL_TYPE_UID_WARM_WHITE)) {
-            logger.debug(
-                    "[{}] DWC: channel Type UID is ESPHOME_CHANNEL_TYPE_UID_WARM_WHITE with PercentType float value {}",
+            logger.trace(
+                    "[{}] channel Type UID is ESPHOME_CHANNEL_TYPE_UID_WARM_WHITE with PercentType float value {}",
                     handler.getLogPrefix(), ww.floatValue());
             LightCommandRequest.Builder builder = LightCommandRequest.newBuilder().setKey(key)
                     .setColorMode(ColorMode.COLOR_MODE_COLD_WARM_WHITE).setHasColorMode(true)
@@ -152,8 +141,8 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
 
         } else if (command instanceof PercentType cw
                 && channel.getChannelTypeUID().equals(ESPHomeChannelTypeProvider.ESPHOME_CHANNEL_TYPE_UID_COLD_WHITE)) {
-            logger.debug(
-                    "[{}] DWC: channel Type UID is ESPHOME_CHANNEL_TYPE_UID_COLD_WHITE with PercentType float value {}",
+            logger.trace(
+                    "[{}] channel Type UID is ESPHOME_CHANNEL_TYPE_UID_COLD_WHITE with PercentType float value {}",
                     handler.getLogPrefix(), cw.floatValue());
             LightCommandRequest.Builder builder = LightCommandRequest.newBuilder().setKey(key)
                     .setColorMode(ColorMode.COLOR_MODE_COLD_WARM_WHITE).setHasColorMode(true)
@@ -163,8 +152,8 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
 
         } else if (command instanceof PercentType brightness
                 && channel.getChannelTypeUID().equals(ESPHomeChannelTypeProvider.ESPHOME_CHANNEL_TYPE_UID_BRIGHTNESS)) {
-            logger.debug(
-                    "[{}] DWC: channel Type UID is ESPHOME_CHANNEL_TYPE_UID_BRIGHTNESS with PercentType float value {}",
+            logger.trace(
+                    "[{}] channel Type UID is ESPHOME_CHANNEL_TYPE_UID_BRIGHTNESS with PercentType float value {}",
                     handler.getLogPrefix(), brightness.floatValue());
             LightCommandRequest.Builder builder = LightCommandRequest.newBuilder().setKey(key)
                     .setColorMode(ColorMode.COLOR_MODE_COLD_WARM_WHITE).setHasColorMode(true)
@@ -174,8 +163,8 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
             handler.sendMessage(builder.build());
         } else if (command instanceof PercentType color_temp && channel.getChannelTypeUID()
                 .equals(ESPHomeChannelTypeProvider.ESPHOME_CHANNEL_TYPE_UID_COLOR_TEMPERATURE)) {
-            logger.debug(
-                    "[{}] DWC: channel Type UID is ESPHOME_CHANNEL_TYPE_UID_COLOR_TEMPERATURE with PercentType float value {}",
+            logger.trace(
+                    "[{}] channel Type UID is ESPHOME_CHANNEL_TYPE_UID_COLOR_TEMPERATURE with PercentType float value {}",
                     handler.getLogPrefix(), color_temp.floatValue());
             LightCommandRequest.Builder builder = LightCommandRequest.newBuilder().setKey(key)
                     .setColorMode(ColorMode.COLOR_MODE_COLOR_TEMPERATURE).setHasColorMode(true)
@@ -183,13 +172,11 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
 
             handler.sendMessage(builder.build());
         } else if (channel.getChannelTypeUID().equals(ESPHomeChannelTypeProvider.ESPHOME_CHANNEL_TYPE_UID_COLOR_MODE)) {
-            logger.debug("[{}] DWC: channel Type UID is ESPHOME_CHANNEL_TYPE_UID_COLOR_MODE, command is {}",
+            logger.trace("[{}] channel Type UID is ESPHOME_CHANNEL_TYPE_UID_COLOR_MODE, command is {}",
                     handler.getLogPrefix(), command);
 
             ColorMode newColorMode = null;
 
-            // if (command.toString() == "COLOR_MODE_RBG") {
-            // newColorMode = ColorMode.COLOR_MODE_RGB;
             try {
                 newColorMode = ColorMode.valueOf(command.toString());
 
@@ -198,13 +185,12 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
 
                 handler.sendMessage(builder.build());
             } catch (IllegalArgumentException e) {
-                logger.debug("[{}] DWC: Unknown color mode '{}'", handler.getLogPrefix(), command.toString());
+                logger.trace("[{}] Unknown color mode '{}'", handler.getLogPrefix(), command.toString());
             }
-            // }
         } else if (channel.getChannelTypeUID().equals(ESPHomeChannelTypeProvider.ESPHOME_CHANNEL_TYPE_UID_ON_OFF)) {
             OnOffType onOff = OnOffType.valueOf(command.toString());
 
-            logger.debug("[{}] DWC: Got On/Off command: {} ", handler.getLogPrefix(),
+            logger.trace("[{}] Got On/Off command: {} ", handler.getLogPrefix(),
                     onOff.equals(OnOffType.ON) ? "ON" : "OFF");
 
             LightCommandRequest.Builder builder = LightCommandRequest.newBuilder().setKey(key)
@@ -238,49 +224,49 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
 
         String icon = getChannelIcon(rsp.getIcon(), "light");
 
-        logger.debug(
-                "[{}] DWC: buildChannels() with:\n ListEntitiesLightResponse unique ID '{}'\n" + " response name '{}'\n"
+        logger.trace(
+                "[{}] buildChannels() with:\n ListEntitiesLightResponse unique ID '{}'\n" + " response name '{}'\n"
                         + " object ID '{}'",
-                handler.getLogPrefix(), rsp.getUniqueId(), rsp.getName(), rsp.getObjectId());
+                handler.getLogPrefix(), rsp.getObjectId(), rsp.getName(), rsp.getObjectId());
 
         List<ColorMode> color_modes = rsp.getSupportedColorModesList();
         String color_modes_str;
 
         color_modes_str = color_modes.stream().map(ColorMode::toString).collect(Collectors.joining(","));
 
-        logger.debug("[{}] DWC: supported color modes: [{}]", handler.getLogPrefix(), color_modes_str);
+        logger.trace("[{}] supported color modes: [{}]", handler.getLogPrefix(), color_modes_str);
 
         configuration.put("color_modes", color_modes_str);
 
         Set<String> semanticTags = Set.of("Control", "Light");
-        // DWC TODO - are RGB / Brightness / ON_OFF mutually exclusive?
+        // TODO - are RGB / Brightness / ON_OFF mutually exclusive?
         if (capabilities.contains(LightColorCapability.RGB)) {
             // Note: RGB gets converted to HSB for OpenHAB; a dimmer item linked to this channel will control the
             // brightness (B in HSB) of the color
-            logger.debug("[{}] DWC: Detected RGB light", handler.getLogPrefix());
+            logger.trace("[{}] Detected RGB light", handler.getLogPrefix());
 
-            logger.debug("[{}] DWC: Creating single COLOR channelType for RGB light with prefix '{}'",
+            logger.trace("[{}] Creating single COLOR channelType for RGB light with prefix '{}'",
                     handler.getLogPrefix(), LightColorCapabilityToStringMap.get(LightColorCapability.RGB));
 
             // Go for a single Color channel
             ChannelType channelType = ESPHomeChannelTypeProvider.ESPHOME_CHANNEL_COLOR;
-            logger.debug("[{}] DWC: Creating COLOR channel for RBG light", handler.getLogPrefix());
+            logger.trace("[{}] Creating COLOR channel for RBG light", handler.getLogPrefix());
 
             Channel channel = ChannelBuilder.create(new ChannelUID(handler.getThing().getUID(), "rgb"))
                     .withLabel(rsp.getName() + " RGB").withKind(ChannelKind.STATE).withType(channelType.getUID())
                     .withAcceptedItemType(COLOR).withConfiguration(configuration).withDefaultTags(semanticTags).build();
 
-            logger.debug("[{}] DWC: Registering COLOR channel", handler.getLogPrefix());
+            logger.trace("[{}] Registering COLOR channel", handler.getLogPrefix());
 
             super.registerChannel(channel, channelType);
 
-            logger.debug("[{}] DWC: Channel registered", handler.getLogPrefix());
+            logger.trace("[{}] Channel registered", handler.getLogPrefix());
         }
 
         if (capabilities.contains(LightColorCapability.BRIGHTNESS)) {
             // Note: overall brightness of the light (separate from the color's brightness)
-            logger.debug("[{}] DWC: Detected BRIGHTNESS light with response unique ID {} and response name {}",
-                    handler.getLogPrefix(), rsp.getUniqueId(), rsp.getName());
+            logger.trace("[{}] Detected BRIGHTNESS light with response unique ID {} and response name {}",
+                    handler.getLogPrefix(), rsp.getObjectId(), rsp.getName());
 
             ChannelType channelType = ESPHomeChannelTypeProvider.ESPHOME_CHANNEL_BRIGHTNESS;
             Channel channel = ChannelBuilder.create(new ChannelUID(handler.getThing().getUID(), "brightness"))
@@ -292,8 +278,8 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
 
         if (capabilities.contains(LightColorCapability.ON_OFF)) {
 
-            logger.debug("[{}] DWC: Detected ON_OFF light with response unique ID {} and response name {}",
-                    handler.getLogPrefix(), rsp.getUniqueId(), rsp.getName());
+            logger.trace("[{}] Detected ON_OFF light with response unique ID {} and response name {}",
+                    handler.getLogPrefix(), rsp.getObjectId(), rsp.getName());
 
             ChannelType channelType = ESPHomeChannelTypeProvider.ESPHOME_CHANNEL_ON_OFF;
             Channel channel = ChannelBuilder.create(new ChannelUID(handler.getThing().getUID(), "on_off"))
@@ -308,10 +294,10 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
             float min_mireds = (float) rsp.getMinMireds();
             float max_mireds = (float) rsp.getMaxMireds();
 
-            logger.debug(
-                    "[{}] DWC: Detected COLOR_TEMPERATURE light with response unique ID {} and response name {}. Mired range: [{},{}]",
-                    handler.getLogPrefix(), rsp.getUniqueId(), rsp.getName(), min_mireds, max_mireds);
-            logger.debug("[{}] DWC: Saving min and max mireds in Configuration object", handler.getLogPrefix());
+            logger.trace(
+                    "[{}] Detected COLOR_TEMPERATURE light with response unique ID {} and response name {}. Mired range: [{},{}]",
+                    handler.getLogPrefix(), rsp.getObjectId(), rsp.getName(), min_mireds, max_mireds);
+            logger.trace("[{}] Saving min and max mireds in Configuration object", handler.getLogPrefix());
 
             configuration.put("min_mireds", min_mireds);
             configuration.put("max_mireds", max_mireds);
@@ -327,52 +313,52 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
 
         // if (color_modes.size() > 0) {
         {
-            logger.debug("[{}] DWC: Adding color mode channel\n" + "Supported color modes: {}", handler.getLogPrefix(),
+            logger.trace("[{}] Adding color mode channel\n" + "Supported color modes: {}", handler.getLogPrefix(),
                     color_modes);
 
             ChannelType channelTypeCM = ESPHomeChannelTypeProvider.ESPHOME_CHANNEL_COLOR_MODE;
-            logger.debug("[{}] DWC: Created ChannelType object channelTypeCM with UID {}", handler.getLogPrefix(),
+            logger.trace("[{}] Created ChannelType object channelTypeCM with UID {}", handler.getLogPrefix(),
                     channelTypeCM.getUID());
             Channel channelCM = ChannelBuilder.create(new ChannelUID(handler.getThing().getUID(), "color_mode"))
                     .withLabel(rsp.getName() + " Color Mode").withKind(ChannelKind.STATE)
                     .withType(channelTypeCM.getUID()).withAcceptedItemType(STRING).withConfiguration(configuration)
                     .build();
 
-            logger.debug("[{}] DWC: Created Channel object channelCM with UID {}", handler.getLogPrefix(),
+            logger.trace("[{}] Created Channel object channelCM with UID {}", handler.getLogPrefix(),
                     channelCM.getUID());
 
-            logger.debug("[{}] DWC: Registering channel {}", handler.getLogPrefix(), channelCM.getUID());
+            logger.trace("[{}] Registering channel {}", handler.getLogPrefix(), channelCM.getUID());
             super.registerChannel(channelCM, channelTypeCM);
 
-            logger.debug("[{}] DWC: Channel {} registered", handler.getLogPrefix(), channelCM.getUID());
+            logger.trace("[{}] Channel {} registered", handler.getLogPrefix(), channelCM.getUID());
         }
         // }
 
         if (capabilities.contains(LightColorCapability.COLD_WARM_WHITE)) {
 
-            logger.debug("[{}] DWC: Detected COLD_WARM_WHITE light with response unique ID {} and response name {}",
-                    handler.getLogPrefix(), rsp.getUniqueId(), rsp.getName());
+            logger.trace("[{}] Detected COLD_WARM_WHITE light with response unique ID {} and response name {}",
+                    handler.getLogPrefix(), rsp.getObjectId(), rsp.getName());
             // Per documentation, this means one channel for the Cold White color temperature and one for the Warm White
             // color temp
             /* Warm White */
             ChannelType channelTypeWW = ESPHomeChannelTypeProvider.ESPHOME_CHANNEL_WARM_WHITE;
-            logger.debug("[{}] DWC: Created ChannelType object channelTypeWW with UID {}", handler.getLogPrefix(),
+            logger.trace("[{}] Created ChannelType object channelTypeWW with UID {}", handler.getLogPrefix(),
                     channelTypeWW.getUID());
             Channel channelWW = ChannelBuilder.create(new ChannelUID(handler.getThing().getUID(), "warm_white"))
                     .withLabel(rsp.getName() + " Warm White").withKind(ChannelKind.STATE)
                     .withType(channelTypeWW.getUID()).withAcceptedItemType(DIMMER).withConfiguration(configuration)
                     .build();
 
-            logger.debug("[{}] DWC: Created Channel object channelWW with UID {}", handler.getLogPrefix(),
+            logger.trace("[{}] Created Channel object channelWW with UID {}", handler.getLogPrefix(),
                     channelWW.getUID());
 
-            logger.debug("[{}] DWC: Registering channel {}", handler.getLogPrefix(), channelWW.getUID());
+            logger.trace("[{}] Registering channel {}", handler.getLogPrefix(), channelWW.getUID());
             super.registerChannel(channelWW, channelTypeWW);
 
-            logger.debug("[{}] DWC: Channel {} registered", handler.getLogPrefix(), channelWW.getUID());
+            logger.trace("[{}] Channel {} registered", handler.getLogPrefix(), channelWW.getUID());
             /* Cold White */
             ChannelType channelTypeCW = ESPHomeChannelTypeProvider.ESPHOME_CHANNEL_COLD_WHITE;
-            logger.debug("[{}] DWC: Created ChannelType object channelTypeCW with UID {}", handler.getLogPrefix(),
+            logger.trace("[{}] Created ChannelType object channelTypeCW with UID {}", handler.getLogPrefix(),
                     channelTypeCW.getUID());
 
             Channel channelCW = ChannelBuilder.create(new ChannelUID(handler.getThing().getUID(), "cold_white"))
@@ -380,13 +366,13 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
                     .withType(channelTypeCW.getUID()).withAcceptedItemType(DIMMER).withConfiguration(configuration)
                     .build();
 
-            logger.debug("[{}] DWC: Created Channel object channelCW with UID {}", handler.getLogPrefix(),
+            logger.trace("[{}] Created Channel object channelCW with UID {}", handler.getLogPrefix(),
                     channelCW.getUID());
 
-            logger.debug("[{}] DWC: Registering channel {}", handler.getLogPrefix(), channelCW.getUID());
+            logger.trace("[{}] Registering channel {}", handler.getLogPrefix(), channelCW.getUID());
             super.registerChannel(channelCW, channelTypeCW);
 
-            logger.debug("[{}] DWC: Channel {} registered", handler.getLogPrefix(), channelCW.getUID());
+            logger.trace("[{}] Channel {} registered", handler.getLogPrefix(), channelCW.getUID());
         }
 
         if (rsp.getEffectsCount() > 0) {
@@ -401,8 +387,8 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
             // spotless:off
             Channel channel = ChannelBuilder.create(new ChannelUID(handler.getThing().getUID(), "effects"))
                     .withLabel(rsp.getName() + " Effects").withKind(ChannelKind.STATE).withType(channelType.getUID())
-                    .withAcceptedItemType(STRING)
-                    .withConfiguration(configuration("Light", rsp.getKey(), LightColorCapabilityToStringMap.get(LightColorCapability.EFFECTS)))
+                    .withAcceptedItemType(STRING).withConfiguration(configuration("Light", rsp.getKey(),
+                            LightColorCapabilityToStringMap.get(LightColorCapability.EFFECTS)))
                     .build();
             // spotless:on
 
@@ -427,50 +413,22 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
                 .filter(channel -> channel.getChannelTypeUID().equals(channelTypeUID)).findFirst();
     }
 
-    /*
-     * if (hasState):
-     * for each channel in getChannels():
-     * switch (channel.channelTypeUID):
-     * case WARM_WHITE:
-     * do warm white stuff
-     * case COLD_WHITE:
-     * do cold white stuff
-     * case RBG:
-     * do RGB stuff
-     * etc, etc
-     * 
-     * 
-     */
-    // TODO: fix brightness/cold white/warm white/CT handling
     public void handleState(LightStateResponse rsp) {
-        logger.debug("[{}] DWC: handleState() with:\n LightStateResponse key: {}\n Class '{}'", handler.getLogPrefix(),
+        logger.trace("[{}] handleState() with:\n LightStateResponse key: {}\n Class '{}'", handler.getLogPrefix(),
                 rsp.getKey(), rsp.getClass());
 
-        logger.debug("[{}] DWC: handleState() with:\n rsp: '{}'", handler.getLogPrefix(),
+        logger.trace("[{}] handleState() with:\n rsp: '{}'", handler.getLogPrefix(),
                 rsp.getAllFields().toString());
         ;
 
-        logger.debug("[{}] DWC: handleState() with:\n getChannels: '{}'", handler.getLogPrefix(),
+        logger.trace("[{}] handleState() with:\n getChannels: '{}'", handler.getLogPrefix(),
                 handler.getThing().getChannels().toString());
-        /*
-         * if (!rsp.getState()) {
-         * logger.debug("[{}] DWC: response has no state, setting to off", handler.getLogPrefix());
-         * 
-         * findChannelByChannelTypeUID(ESPHomeChannelTypeProvider.ESPHOME_CHANNEL_TYPE_UID_ON_OFF)
-         * .ifPresent(channel_on_off -> {
-         * logger.debug("[{}] DWC: calling updateState with OnOffType.OFF", handler.getLogPrefix());
-         * 
-         * handler.updateState(channel_on_off.getUID(), State.);
-         * });
-         * 
-         * 
-         * } else
-         */ {
+      
             findChannelByKeyAndField(rsp.getKey(), CHANNEL_LIGHT).ifPresent(channel -> {
                 Configuration configuration = channel.getConfiguration();
                 SortedSet<LightColorCapability> capabilities = deserialize((String) configuration.get("capabilities"));
-                logger.debug(
-                        "[{}] DWC: findChannelByKeyAndField:\n" + " Channel: {}\n" + " ChannelTypeUID: {}\n"
+                logger.trace(
+                        "[{}] findChannelByKeyAndField:\n" + " Channel: {}\n" + " ChannelTypeUID: {}\n"
                                 + " Capabilities: {}\n" + " AcceptedItemType: {}\n" + " Properties: {}",
                         handler.getLogPrefix(), channel.getUID(), channel.getChannelTypeUID(),
                         (String) configuration.get("capabilities"), channel.getAcceptedItemType(),
@@ -478,13 +436,12 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
 
                 findChannelByChannelTypeUID(ESPHomeChannelTypeProvider.ESPHOME_CHANNEL_TYPE_UID_COLOR_MODE)
                         .ifPresent(channel_color_mode -> {
-                            logger.debug(
-                                    "[{}] DWC: Found channel with type UID ESPHOME_CHANNEL_TYPE_UID_COLOR_MODE",
+                            logger.trace("[{}] Found channel with type UID ESPHOME_CHANNEL_TYPE_UID_COLOR_MODE",
                                     handler.getLogPrefix());
                             // if (capabilities.contains(LightColorCapability.COLOR_MODE)) {
                             ColorMode color_mode = rsp.getColorMode();
-                            logger.debug(
-                                    "[{}] DWC: Processing Color Mode capability\n" + "getState(): {}\n"
+                            logger.trace(
+                                    "[{}] Processing Color Mode capability\n" + "getState(): {}\n"
                                             + " Color Mode: {}",
                                     handler.getLogPrefix(), rsp.getState() ? "true" : "false", color_mode.toString());
 
@@ -496,32 +453,31 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
                 // since the RGB channel applies the color_brightness instead
                 findChannelByChannelTypeUID(ESPHomeChannelTypeProvider.ESPHOME_CHANNEL_TYPE_UID_BRIGHTNESS)
                         .ifPresent(channel_brightness -> {
-                            logger.debug("[{}] DWC: Found channel with type UID ESPHOME_CHANNEL_TYPE_UID_BRIGHTNESS",
+                            logger.trace("[{}] Found channel with type UID ESPHOME_CHANNEL_TYPE_UID_BRIGHTNESS",
                                     handler.getLogPrefix(), rsp.getState() ? "true" : "false");
                             int brightness = (int) (rsp.getState() ? rsp.getBrightness() * 100 : 0);
                             PercentType percentType = new PercentType(brightness);
-                            logger.debug(
-                                    "[{}] DWC: Processing Brightness channel\n" + " getState(): {}\n"
+                            logger.trace(
+                                    "[{}] Processing Brightness channel\n" + " getState(): {}\n"
                                             + " Brightness: {}\n" + " Has Brightness Capability: {}\n"
                                             + " Current Color Mode: {}",
                                     handler.getLogPrefix(), rsp.getState() ? "true" : "false", percentType.floatValue(),
                                     capabilities.contains(LightColorCapability.BRIGHTNESS) ? "true" : "false",
                                     rsp.getColorMode().toString());
-                            logger.debug("[{}] Posting state to channel_brightness", handler.getLogPrefix());
+                            logger.trace("[{}] Posting state to channel_brightness", handler.getLogPrefix());
                             handler.updateState(channel_brightness.getUID(), percentType);
 
                         });
 
                 findChannelByChannelTypeUID(ESPHomeChannelTypeProvider.ESPHOME_CHANNEL_TYPE_UID_COLD_WHITE)
                         .ifPresent((channel_cold_white -> {
-                            logger.debug(
-                                    "[{}] DWC: Found channel with type UID ESPHOME_CHANNEL_TYPE_UID_COLD_WHITE",
+                            logger.trace("[{}] Found channel with type UID ESPHOME_CHANNEL_TYPE_UID_COLD_WHITE",
                                     handler.getLogPrefix());
 
                             PercentType percentType = new PercentType(
                                     (int) (rsp.getState() ? rsp.getColdWhite() * 100 : 0));
-                            logger.debug(
-                                    "[{}] DWC: Processing Cold White capability\n" + "getState(): {}\n"
+                            logger.trace(
+                                    "[{}] Processing Cold White capability\n" + "getState(): {}\n"
                                             + " COLD_WHITE: raw: {} / float: {}",
                                     handler.getLogPrefix(), rsp.getState() ? "true" : "false", rsp.getColdWhite(),
                                     percentType.floatValue());
@@ -531,14 +487,13 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
 
                 findChannelByChannelTypeUID(ESPHomeChannelTypeProvider.ESPHOME_CHANNEL_TYPE_UID_WARM_WHITE)
                         .ifPresent((channel_warm_white -> {
-                            logger.debug(
-                                    "[{}] DWC: Found channel with type UID ESPHOME_CHANNEL_TYPE_UID_WARM_WHITE",
+                            logger.trace("[{}] Found channel with type UID ESPHOME_CHANNEL_TYPE_UID_WARM_WHITE",
                                     handler.getLogPrefix());
 
                             PercentType percentType = new PercentType(
                                     (int) (rsp.getState() ? rsp.getWarmWhite() * 100 : 0));
-                            logger.debug(
-                                    "[{}] DWC: Processing Warm White capability\n" + "getState(): {}\n"
+                            logger.trace(
+                                    "[{}] Processing Warm White capability\n" + "getState(): {}\n"
                                             + " WARM_WHITE: raw: {} / float: {}",
                                     handler.getLogPrefix(), rsp.getState() ? "true" : "false", rsp.getWarmWhite(),
                                     percentType.floatValue());
@@ -548,18 +503,16 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
 
                 findChannelByChannelTypeUID(ESPHomeChannelTypeProvider.ESPHOME_CHANNEL_TYPE_UID_COLOR_TEMPERATURE)
                         .ifPresent((channel_color_temp -> {
-                            logger.debug(
-                                    "[{}] DWC: Found channel with type UID ESPHOME_CHANNEL_TYPE_UID_COLOR_TEMPERATURE",
+                            logger.trace(
+                                    "[{}] Found channel with type UID ESPHOME_CHANNEL_TYPE_UID_COLOR_TEMPERATURE",
                                     handler.getLogPrefix());
 
                             BigDecimal min_mireds_obj = (BigDecimal) configuration.get("min_mireds");
                             BigDecimal max_mireds_obj = (BigDecimal) configuration.get("max_mireds");
 
-                            logger.debug("[{} DWC: Class type of min_mireds_obj: {}]", handler.getLogPrefix(),
+                            logger.trace("[{} Class type of min_mireds_obj: {}]", handler.getLogPrefix(),
                                     min_mireds_obj.getClass());
 
-                            // PercentType percentType = new PercentType(
-                            // (int) (rsp.getState() ? rsp.getColorTemperature() * 100 : 0));
                             float x = rsp.getColorTemperature();
                             float y_min = 0;
                             float y_max = 100;
@@ -568,8 +521,8 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
 
                             float y = y_min + (y_max - y_min) * ((x - x_min) / (x_max - x_min));
 
-                            logger.debug(
-                                    "[{}] DWC: Processing Color Temperature capability\n" + "getState(): {}\n"
+                            logger.trace(
+                                    "[{}] Processing Color Temperature capability\n" + "getState(): {}\n"
                                             + " ColorTemp: raw: {} / float: {}\n" + " Scaled ColorTemp: {}\n"
                                             + " Config.min_mireds: {}\n" + " Config.max_mireds: {}",
                                     handler.getLogPrefix(), rsp.getState() ? "true" : "false",
@@ -581,22 +534,19 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
 
                 findChannelByChannelTypeUID(ESPHomeChannelTypeProvider.ESPHOME_CHANNEL_TYPE_UID_ON_OFF)
                         .ifPresent(channel_on_off -> {
-                            logger.debug(
-                                    "[{}] DWC: Found channel with type UID ESPHOME_CHANNEL_TYPE_UID_ON_OFF",
+                            logger.trace("[{}] Found channel with type UID ESPHOME_CHANNEL_TYPE_UID_ON_OFF",
                                     handler.getLogPrefix());
-                            // if (capabilities.contains(LightColorCapability.COLOR_MODE)) {
                             OnOffType onOff = rsp.getState() ? OnOffType.ON : OnOffType.OFF;
-                            logger.debug("[{}] DWC: Processing On/Off Channel with setting capability\n"
+                            logger.trace("[{}] Processing On/Off Channel with setting capability\n"
                                     + "getState(): {}\n" + " updateState to be called with: {}", handler.getLogPrefix(),
                                     onOff);
 
                             handler.updateState(channel_on_off.getUID(), onOff);
-                            // }
                         });
 
                 if (capabilities.contains(LightColorCapability.RGB)) {
 
-                    logger.debug("[{}] DWC: findChannelByKeyAndField: Checking RGB (getState(): {})",
+                    logger.trace("[{}] findChannelByKeyAndField: Checking RGB (getState(): {})",
                             handler.getLogPrefix(), rsp.getState() ? "True" : "False");
 
                     if (rsp.getState()) {
@@ -609,8 +559,8 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
                         PercentType percentTypeColorBrightness = new PercentType(
                                 (int) (rsp.getColorBrightness() * 100));
 
-                        logger.debug(
-                                "[{}] DWC: findChannelByKeyAndField: processing RGB & ColorBrightness (?) capability\n"
+                        logger.trace(
+                                "[{}] findChannelByKeyAndField: processing RGB & ColorBrightness (?) capability\n"
                                         + " R: raw: {} / float: {}\n" + " G: raw: {} / float: {}\n"
                                         + " B: raw: {} / float: {}\n" + " Brightness: raw: {} / float: {}\n"
                                         + " Color Brightness: raw: {} / float: {}",
@@ -623,8 +573,8 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
                                 new PercentType((int) ((rsp.getRed() * rsp.getBrightness()) * 100)),
                                 new PercentType((int) ((rsp.getGreen() * rsp.getBrightness()) * 100)),
                                 new PercentType((int) ((rsp.getBlue() * rsp.getBrightness()) * 100)) };
-                        logger.debug(
-                                "[{}] DWC: findChannelByKeyAndField: processing RGB & ColorBrightness (?) capability (2)\n"
+                        logger.trace(
+                                "[{}] findChannelByKeyAndField: processing RGB & ColorBrightness (?) capability (2)\n"
                                         + " R2 float: {}\n" + " G2 float: {}\n" + " B2 float: {}\n",
                                 handler.getLogPrefix(), percentTypeRGB2[0].floatValue(),
                                 percentTypeRGB2[1].floatValue(), percentTypeRGB2[2].floatValue());
@@ -633,71 +583,53 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
                         HSBType hsbType = ColorUtil.rgbToHsb(percentTypeRGB);
                         HSBType hsbType2 = ColorUtil.rgbToHsb(percentTypeRGB2);
 
-                        logger.debug(
-                                "[{}] DWC: findChannelByKeyAndField: Converted HSB values:\n" + " H: {}\n" + " S: {}\n"
+                        logger.trace(
+                                "[{}] findChannelByKeyAndField: Converted HSB values:\n" + " H: {}\n" + " S: {}\n"
                                         + " B: {}",
                                 handler.getLogPrefix(), hsbType.getHue().floatValue(),
                                 hsbType.getSaturation().floatValue(), hsbType.getBrightness().floatValue());
 
-                        logger.debug(
-                                "[{}] DWC: findChannelByKeyAndField: Converted HSB values (2):\n" + " H: {}\n"
+                        logger.trace(
+                                "[{}] findChannelByKeyAndField: Converted HSB values (2):\n" + " H: {}\n"
                                         + " S: {}\n" + " B: {}",
                                 handler.getLogPrefix(), hsbType2.getHue().floatValue(),
                                 hsbType2.getSaturation().floatValue(), hsbType2.getBrightness().floatValue());
 
-                        // If off, set brightness to 0
-                        // if (!rsp.getState()) {
-                        // hsbType = new HSBType(hsbType.getHue(), hsbType.getSaturation(), new PercentType(0));
-                        // } else {
-                        // Adjust brightness
-                        // logger.debug("[{}] DWC: findChannelByKeyAndField: Applying ColorBrightness {}",
-                        // handler.getLogPrefix(), percentTypeColorBrightness.floatValue());
-                        // hsbType = new HSBType(hsbType.getHue(), hsbType.getSaturation(), percentTypeColorBrightness);
-                        // // }
+               
 
                         if (rsp.getColorMode() == ColorMode.COLOR_MODE_RGB_COLD_WARM_WHITE) {
-                            logger.debug("[{}] DWC: color mode rgb cold warm white", handler.getLogPrefix());
-                            logger.debug("[{}] DWC: applying colorBrightness {} to HSB 1", handler.getLogPrefix(),
+                            logger.trace("[{}] color mode rgb cold warm white", handler.getLogPrefix());
+                            logger.trace("[{}] applying colorBrightness {} to HSB 1", handler.getLogPrefix(),
                                     percentTypeColorBrightness.floatValue());
                             hsbType = new HSBType(hsbType.getHue(), hsbType.getSaturation(),
                                     percentTypeColorBrightness);
                         } else if (rsp.getColorMode() == ColorMode.COLOR_MODE_RGB) {
-                            logger.debug("[{}] DWC: color mode rgb", handler.getLogPrefix());
-                            logger.debug("[{}] DWC: applying brightness {} to HSB 1", handler.getLogPrefix(),
+                            logger.trace("[{}] color mode rgb", handler.getLogPrefix());
+                            logger.trace("[{}] applying brightness {} to HSB 1", handler.getLogPrefix(),
                                     channel.getClass(), percentTypeBrightness.floatValue());
                             hsbType = new HSBType(hsbType.getHue(), hsbType.getSaturation(), percentTypeBrightness);
                         }
 
                         if (((int) (rsp.getColorBrightness())) == 1) {
-                            logger.debug("[{}] DWC: channel class {}\n" + " getColorBrightness == 1, so using HSB 2",
+                            logger.trace("[{}] channel class {}\n" + " getColorBrightness == 1, so using HSB 2",
                                     handler.getLogPrefix(), channel.getClass());
                             hsbType = hsbType2;
                         } else {
-                            // // logger.debug("[{}] DWC: getColorBrightness != 1, so applying colorBrightness {} to HSB
-                            // // 1",
-                            // // handler.getLogPrefix(), percentTypeColorBrightness.floatValue());
-                            // // hsbType = new HSBType(hsbType.getHue(), hsbType.getSaturation(),
-                            // // percentTypeColorBrightness);
-                            // // handler.getThing().
-
-                            // logger.debug(
-                            // "[{}] DWC: channel class {}\n\" + \" getColorBrightness != 1, so applying brightness {}
-                            // to HSB 1",
-                            // handler.getLogPrefix(), channel.getClass(),
-                            // percentTypeColorBrightness.floatValue());
-                            // hsbType = new HSBType(hsbType.getHue(), hsbType.getSaturation(),
-                            // percentTypeColorBrightness);
+                            logger.trace(
+                                "[{}] Uh-oh, what are we doing here?",
+                                handler.getLogPrefix());
+                            
                         }
 
-                        logger.debug(
-                                "[{}] DWC: findChannelByKeyAndField: Final caclulated HSB values:\n" + " H: {}\n"
+                        logger.trace(
+                                "[{}] findChannelByKeyAndField: Final caclulated HSB values:\n" + " H: {}\n"
                                         + " S: {}\n" + " B: {}",
                                 handler.getLogPrefix(), hsbType.getHue().floatValue(),
                                 hsbType.getSaturation().floatValue(), hsbType.getBrightness().floatValue());
 
                         handler.updateState(channel.getUID(), hsbType);
                     } else {
-                        logger.debug("[{}] DWC: state is false, no-op", handler.getLogPrefix());
+                        logger.trace("[{}] state is false, no-op", handler.getLogPrefix());
                     }
                 }
 
@@ -708,8 +640,8 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
                 if (capabilities.contains(LightColorCapability.ON_OFF)
                         && !(capabilities.contains(LightColorCapability.RGB))) {
                     OnOffType onOff = rsp.getState() ? OnOffType.ON : OnOffType.OFF;
-                    logger.debug(
-                            "[{}] DWC: findChannelByKeyAndField: processing On/Off capability\n" + "getState(): {}\n"
+                    logger.trace(
+                            "[{}] findChannelByKeyAndField: processing On/Off capability\n" + "getState(): {}\n"
                                     + " ON_OFF: {}",
                             handler.getLogPrefix(), rsp.getState() ? "true" : "false",
                             onOff.equals(OnOffType.ON) ? "ON" : "OFF");
@@ -720,7 +652,7 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
             findChannelByKeyAndField(rsp.getKey(), CHANNEL_EFFECTS).ifPresent(channel -> {
                 handler.updateState(channel.getUID(), new StringType(rsp.getEffect()));
             });
-        }
+        
     }
 
     private SortedSet<LightColorCapability> decodeCapabilities(ListEntitiesLightResponse rsp) {
@@ -764,29 +696,17 @@ public class LightMessageHandler extends AbstractMessageHandler<ListEntitiesLigh
     // Turn off spotless formatting for these two Maps to keep the key/value pairs in the code readable
     // spotless:off
     private static final Map<LightColorCapability, String> LightColorCapabilityToStringMap = Map.of(
-            LightColorCapability.ON_OFF, "switch",
-            LightColorCapability.BRIGHTNESS, "brightness",
-            LightColorCapability.WHITE, "white",
-            LightColorCapability.COLOR_TEMPERATURE, "color_temperature",
-            LightColorCapability.COLD_WARM_WHITE,"cold_warm_white", 
-            LightColorCapability.WARM_WHITE, "warm_white",
-            LightColorCapability.COLD_WHITE, "cold_white",
-            LightColorCapability.RGB, "rgb",
-            LightColorCapability.EFFECTS, "effects",
-            LightColorCapability.COLOR_MODE, "color_mode"
-    );
+            LightColorCapability.ON_OFF, "switch", LightColorCapability.BRIGHTNESS, "brightness",
+            LightColorCapability.WHITE, "white", LightColorCapability.COLOR_TEMPERATURE, "color_temperature",
+            LightColorCapability.COLD_WARM_WHITE, "cold_warm_white", LightColorCapability.WARM_WHITE, "warm_white",
+            LightColorCapability.COLD_WHITE, "cold_white", LightColorCapability.RGB, "rgb",
+            LightColorCapability.EFFECTS, "effects", LightColorCapability.COLOR_MODE, "color_mode");
 
-    private static final Map<String, LightColorCapability> LightColorStringToCapabilityMap = Map.of(
-            "switch", LightColorCapability.ON_OFF,
-            "brightness", LightColorCapability.BRIGHTNESS,
-            "white", LightColorCapability.WHITE,
-            "color_temperature", LightColorCapability.COLOR_TEMPERATURE,
-            "cold_warm_white", LightColorCapability.COLD_WARM_WHITE,
-            "warm_white", LightColorCapability.WARM_WHITE,
-            "cold_white", LightColorCapability.COLD_WHITE,
-            "rgb", LightColorCapability.RGB,
-            "effects", LightColorCapability.EFFECTS,
-            "color_mode", LightColorCapability.COLOR_MODE
-    );
+    private static final Map<String, LightColorCapability> LightColorStringToCapabilityMap = Map.of("switch",
+            LightColorCapability.ON_OFF, "brightness", LightColorCapability.BRIGHTNESS, "white",
+            LightColorCapability.WHITE, "color_temperature", LightColorCapability.COLOR_TEMPERATURE, "cold_warm_white",
+            LightColorCapability.COLD_WARM_WHITE, "warm_white", LightColorCapability.WARM_WHITE, "cold_white",
+            LightColorCapability.COLD_WHITE, "rgb", LightColorCapability.RGB, "effects", LightColorCapability.EFFECTS,
+            "color_mode", LightColorCapability.COLOR_MODE);
     // spotless:on
 }
